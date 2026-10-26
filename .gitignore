@@ -1,5 +1,6 @@
 # Build output
 *.o
+*.d
 *.bin
 *.iso
 iso/boot/kernel.bin
