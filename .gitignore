@@ -1,0 +1,5 @@
+# Build output
+*.o
+*.bin
+*.iso
+iso/boot/kernel.bin

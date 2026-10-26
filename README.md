@@ -1,168 +1,97 @@
-# MyOS - A Simple Operating System
+# MyOS - Kernel Craft
 
-A basic operating system implementation with keyboard input and file handling capabilities.
-
-## Requirements
-
-### Development Tools
-1. **NASM (Netwide Assembler)**
-   - Version: 2.16.03 or later
-   - Purpose: Assembly code compilation for bootloader
-   - Why: NASM provides simple syntax and good support for x86 architecture
-
-2. **LLVM/Clang**
-   - Version: 20.1.2 or later
-   - Purpose: C code compilation for kernel
-   - Why: Modern compiler with good cross-compilation support and clean error messages
-
-3. **LLD (LLVM Linker)**
-   - Version: 20.1.2 or later
-   - Purpose: Linking kernel components
-   - Why: Compatible with LLVM/Clang and supports various output formats
-
-4. **GRUB (Grand Unified Bootloader)**
-   - Version: 2.0 or later
-   - Purpose: Bootloader for loading kernel
-   - Why: Industry standard, supports multiboot specification
-
-5. **QEMU**
-   - Version: Latest
-   - Purpose: OS emulation and testing
-   - Why: Provides good debugging capabilities and x86 emulation
-
-### System Requirements
-- Linux/Unix environment (WSL recommended for Windows users)
-- At least 1GB RAM for development
-- x86/x86_64 processor
-
-## Installation (Ubuntu/WSL)
-
-```bash
-# Update package list
-sudo apt update
-
-# Install required packages
-sudo apt install build-essential nasm qemu-system-x86 grub-pc xorriso mtools gcc-multilib clang llvm lld
-```
-
-## Project Structure
-
-```
-myos/
-├── boot/
-│   └── boot.asm       # Bootloader code
-├── kernel/
-│   ├── kernel.c       # Kernel main code
-│   └── linker.ld      # Linker script
-├── iso/
-│   └── boot/
-│       └── grub/
-│           └── grub.cfg    # GRUB configuration
-└── Makefile           # Build automation
-```
+A small 32-bit x86 operating system written from scratch in C and assembly. It boots through GRUB (Multiboot), shows a text-mode shell, and has a simple in-memory file system.
 
 ## Features
 
-1. **Bootloader**
-   - 16-bit real mode initialization
-   - Protected mode switching
-   - Kernel loading
+- **Boot:** GRUB loads the kernel in 32-bit protected mode (Multiboot); a short assembly stub sets up the stack and calls the kernel.
+- **Display:** VGA text mode, 80x25, white on black.
+- **Input:** Keyboard read directly from the PS/2 controller (ports `0x60` / `0x64`, polled).
+- **Shell:** `myos>` prompt with a command parser.
+- **File system:** in-memory only, up to 100 files, 1024 bytes per file, names up to 31 characters.
 
-2. **Kernel**
-   - Text mode display (80x25 characters)
-   - Keyboard input handling
-   - Basic in-memory file system
-   - Command-line interface
+## Commands
 
-3. **File System**
-   - In-memory storage (non-persistent)
-   - Maximum 100 files
-   - Maximum file size: 1024 bytes
-   - Basic file operations (create, read, write)
+| Command | Description |
+| --- | --- |
+| `help` | List available commands |
+| `create <filename>` | Create an empty file |
+| `write <filename> <content>` | Write content to an existing file |
+| `read <filename>` | Print a file's content |
+| `ls` | List files and their sizes |
+
+```
+myos> create test.txt
+myos> write test.txt Hello World!
+myos> read test.txt
+File contents: Hello World!
+```
+
+## Project structure
+
+```
+.
+├── boot/
+│   └── entry.S             # Entry point: sets up the stack, calls kernel_init
+├── kernel/
+│   ├── kernel.c            # Kernel: Multiboot header, VGA, keyboard, shell, file system
+│   └── linker.ld           # Linker script (kernel at 1 MiB)
+├── iso/
+│   └── boot/grub/grub.cfg  # GRUB menu entry
+├── Makefile
+├── LICENSE
+└── README.md
+```
+
+## Requirements
+
+Linux or WSL (Ubuntu) on an x86/x86_64 machine.
+
+```bash
+sudo apt update
+sudo apt install build-essential gcc-multilib binutils grub-pc-bin xorriso mtools qemu-system-x86
+```
+
+## Build and run
+
+```bash
+make          # builds iso/boot/kernel.bin and myos.iso
+make run      # boots myos.iso in QEMU
+make clean    # removes build output
+```
+
+You can also start it manually with `qemu-system-i386 -cdrom myos.iso`.
+
+## How it boots
+
+1. BIOS starts GRUB from the ISO.
+2. GRUB finds the Multiboot header (the first thing in the kernel image) and loads the kernel at 1 MiB (`0x100000`) in 32-bit protected mode.
+3. `_start` in `boot/entry.S` sets `ESP` to a 16 KiB stack in `.bss` and calls `kernel_init()`.
+4. `kernel_init()` clears the screen, initialises the file system and loops, polling the keyboard.
+
+## Memory layout
+
+| Region | Address |
+| --- | --- |
+| Kernel image | `0x100000` (1 MiB) |
+| VGA text buffer | `0xB8000` |
+| Kernel stack | 16 KiB, in `.bss` |
 
 ## Limitations
 
-1. **File System**
-   - No persistent storage (files are lost on reboot)
-   - Limited file size (1024 bytes)
-   - No directories/folders
-   - No file permissions
+- Files live in memory and are lost on reboot; no directories or permissions.
+- Text mode only; the screen wraps back to the top instead of scrolling.
+- Keyboard input is polled; there is no IDT or interrupt handling yet. Only lowercase letters, digits and basic punctuation are supported (no Shift or Caps Lock).
+- No memory management, processes or multitasking.
 
-2. **Display**
-   - Text-mode only (no graphics)
-   - Limited to 80x25 characters
-   - Basic white-on-black color scheme
+## Future improvements
 
-3. **Input**
-   - Basic keyboard support
-   - No mouse support
-   - Limited special key support
-
-## Building and Running
-
-1. **Build the OS**
-```bash
-make clean
-make
-```
-
-2. **Run in QEMU**
-```bash
-qemu-system-i386 -cdrom myos.iso
-```
-
-## Available Commands
-
-1. `help` - Display available commands
-2. `create <filename>` - Create a new file
-   ```
-   myos> create test.txt
-   ```
-
-3. `write <filename> <content>` - Write content to a file
-   ```
-   myos> write test.txt Hello World!
-   ```
-
-4. `read <filename>` - Read content from a file
-   ```
-   myos> read test.txt
-   ```
-
-5. `ls` - List all files
-   ```
-   myos> ls
-   ```
-
-## Technical Details
-
-1. **Memory Layout**
-   - Kernel loaded at 1MB (0x100000)
-   - VGA buffer at 0xB8000
-   - Stack at 0x7C00
-
-2. **Hardware Communication**
-   - Direct port I/O for keyboard
-   - VGA text mode for display
-   - Uses x86 protected mode
-
-## Future Improvements
-
-1. Add persistent storage support
-2. Implement proper file system (FAT32/ext2)
-3. Add process management
-4. Implement memory management
-5. Add color support
-6. Add more shell commands
-7. Implement proper error handling
-
-## Contributing
-
-Feel free to contribute to this project by:
-1. Reporting bugs
-2. Suggesting new features
-3. Submitting pull requests
+- Interrupt handling (GDT/IDT, keyboard IRQ)
+- Screen scrolling and Shift/Caps Lock support
+- Persistent storage and a real file system (FAT32/ext2)
+- Memory management and process management
+- More shell commands and better error handling
 
 ## License
 
-This project is open source and available under the MIT License. 
+Released under the MIT License. See [LICENSE](LICENSE).
